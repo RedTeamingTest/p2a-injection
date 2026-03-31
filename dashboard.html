@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>P2A Attack Demo - 5 Systems x 4 Models</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<style>
+:root{--bg:#0f1117;--sidebar:#161b27;--card:#1e2535;--accent:#4f8ef7;--success:#2ecc71;--danger:#e74c3c;--warn:#f39c12;--text:#d4d8e8;--muted:#8893ad;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;margin:0;}
+a{color:var(--accent);text-decoration:none;}
+.top-bar{background:var(--sidebar);border-bottom:1px solid #252d3d;padding:10px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;}
+.top-bar h5{margin:0;color:var(--accent);font-size:1rem;white-space:nowrap;}
+.top-bar .nav-link{color:var(--muted);font-size:.85rem;padding:6px 14px;border-radius:6px;cursor:pointer;transition:.15s;}
+.top-bar .nav-link:hover{color:var(--text);background:#1d2436;}
+.top-bar .nav-link.active{color:#fff;background:var(--accent);}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;}
+.status-ok{background:var(--success);}.status-fail{background:var(--danger);}
+.page{display:none;padding:20px 24px;max-width:1600px;margin:0 auto;}
+.page.active{display:block;}
+.dash-card{background:var(--card);border:1px solid #252d3d;border-radius:10px;padding:18px;transition:transform .15s;}
+.dash-card:hover{transform:translateY(-2px);}
+.asr-big{font-size:2rem;font-weight:700;}
+.asr-big.high{color:var(--danger);}.asr-big.med{color:var(--warn);}.asr-big.low{color:var(--success);}
+.heatmap-table{width:100%;border-collapse:separate;border-spacing:2px;}
+.heatmap-table th{background:var(--sidebar);color:var(--muted);padding:8px 10px;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;text-align:center;}
+.heatmap-table td{padding:8px 10px;text-align:center;font-size:.82rem;font-weight:600;border-radius:4px;cursor:default;}
+.heatmap-table td.sys-label{text-align:left;background:var(--sidebar);color:var(--text);font-weight:500;min-width:120px;}
+#sidebar{width:280px;min-width:260px;background:var(--sidebar);height:calc(100vh - 52px);overflow-y:auto;position:fixed;top:52px;left:0;border-right:1px solid #252d3d;}
+#runner-main{margin-left:280px;padding:20px 24px;max-width:1100px;}
+.atk-item{padding:8px 12px;cursor:pointer;border-bottom:1px solid #1a1f2e;transition:background .15s;}
+.atk-item:hover{background:#1d2436;}.atk-item.active{background:#1d3a6e;border-left:3px solid var(--accent);}
+.badge-cat{font-size:.65rem;padding:2px 5px;border-radius:3px;}
+.cat-U{background:#6d28d9;}.cat-RD{background:#0e7490;}.cat-RI{background:#b45309;}.cat-IL{background:#065f46;}.cat-OB{background:#744210;}
+.step-box{background:#11161f;border:1px solid #252d3d;border-radius:6px;padding:14px;margin-bottom:10px;}
+.step-title{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.step-num{width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;font-size:.65rem;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+pre{background:#0a0d14;border:1px solid #1e2535;padding:10px;border-radius:5px;font-size:.77rem;color:#c5cae9;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow-y:auto;margin:0;}
+.payload-box{background:#0d1117;border:1px solid #2563eb44;border-left:3px solid var(--accent);padding:10px;border-radius:5px;font-size:.82rem;color:#93c5fd;white-space:pre-wrap;word-break:break-all;}
+.badge-success-c{background:var(--success);color:#fff;padding:4px 12px;border-radius:12px;font-size:.82rem;}
+.badge-fail-c{background:var(--danger);color:#fff;padding:4px 12px;border-radius:12px;font-size:.82rem;}
+.badge-poison{background:var(--warn);color:#111;padding:2px 6px;border-radius:3px;font-size:.68rem;}
+.filter-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 12px;border-bottom:1px solid #252d3d;}
+.filter-btn{font-size:.7rem;padding:2px 8px;border-radius:10px;border:1px solid #252d3d;cursor:pointer;background:#1a2035;color:var(--muted);}
+.filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.testbed-tabs{display:flex;gap:2px;padding:6px 10px;border-bottom:1px solid #252d3d;flex-wrap:wrap;}
+.testbed-tabs .tb-tab{font-size:.72rem;padding:4px 10px;border-radius:4px;cursor:pointer;color:var(--muted);background:transparent;border:1px solid transparent;}
+.testbed-tabs .tb-tab:hover{color:var(--text);}
+.testbed-tabs .tb-tab.active{color:#fff;background:#1d3a6e;border-color:var(--accent);}
+.diff-badge{font-size:.7rem;background:#7c3aed22;border:1px solid #7c3aed44;color:#c4b5fd;padding:5px 8px;border-radius:3px;margin-bottom:4px;}
+.timing{font-size:.68rem;color:var(--muted);}
+.step-pending{opacity:.4;}.step-active{border-color:#4f8ef755!important;}.step-done{border-color:#2ecc7144!important;}
+.step-loading::after{content:'';display:inline-block;width:10px;height:10px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;margin-left:8px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.model-select{background:#1a2035;color:var(--text);border:1px solid #252d3d;border-radius:5px;padding:3px 8px;font-size:.78rem;}
+.detail-table{width:100%;border-collapse:collapse;font-size:.8rem;}
+.detail-table th{background:var(--sidebar);color:var(--muted);padding:6px 10px;text-align:left;font-size:.72rem;text-transform:uppercase;}
+.detail-table td{padding:6px 10px;border-bottom:1px solid #1a1f2e;}
+.detail-table tr:hover{background:#1d2436;}
+@media(max-width:768px){#sidebar{position:relative;width:100%;height:auto;}#runner-main{margin-left:0;}}
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <h5>&#9889; P2A Attack Demo</h5>
+  <div style="display:flex;gap:4px;margin-left:16px;" id="page-nav">
+    <a class="nav-link active" data-page="dashboard">Dashboard</a>
+    <a class="nav-link" data-page="runner">Attack Runner</a>
+    <a class="nav-link" data-page="results-detail">Results Detail</a>
+    <a class="nav-link" data-page="custom">Custom API</a>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:12px;align-items:center;font-size:.78rem;" id="status-bar">
+    <span id="ollama-status" class="text-muted">Ollama: checking...</span>
+    <span id="backends-status" class="text-muted"></span>
+  </div>
+</div>
+<div class="page active" id="page-dashboard">
+  <h4 style="color:var(--accent);margin-bottom:4px;">Experiment Overview</h4>
+  <p class="text-muted mb-3" style="font-size:.85rem;">5 Real-World Systems x 4 LLM Models = 20 Experiments, 2800 Trials</p>
+  <div class="row g-3 mb-4" id="summary-cards">
+    <div class="col-md-3"><div class="dash-card"><div class="text-muted" style="font-size:.75rem;">GRAND TOTAL ASR</div><div class="asr-big" id="grand-asr">-</div><div class="text-muted" style="font-size:.75rem;" id="grand-detail">-</div></div></div>
+    <div class="col-md-3"><div class="dash-card"><div class="text-muted" style="font-size:.75rem;">EXPERIMENTS</div><div class="asr-big" style="color:var(--accent)" id="exp-count">-</div><div class="text-muted" style="font-size:.75rem;" id="exp-detail">-</div></div></div>
+    <div class="col-md-3"><div class="dash-card"><div class="text-muted" style="font-size:.75rem;">MOST VULNERABLE MODEL</div><div id="vuln-model" style="font-size:1.2rem;font-weight:600;color:var(--danger);">-</div><div class="text-muted" style="font-size:.75rem;" id="vuln-model-detail">-</div></div></div>
+    <div class="col-md-3"><div class="dash-card"><div class="text-muted" style="font-size:.75rem;">MOST VULNERABLE SYSTEM</div><div id="vuln-sys" style="font-size:1.2rem;font-weight:600;color:var(--danger);">-</div><div class="text-muted" style="font-size:.75rem;" id="vuln-sys-detail">-</div></div></div>
+  </div>
+  <div class="dash-card mb-4">
+    <h6 style="color:var(--accent);margin-bottom:12px;">ASR Heatmap: System x Model (%)</h6>
+    <table class="heatmap-table" id="heatmap-table"><thead><tr><th>System</th></tr></thead><tbody></tbody></table>
+  </div>
+  <div class="dash-card mb-4">
+    <h6 style="color:var(--accent);margin-bottom:12px;">Backend Services Status</h6>
+    <div class="row g-2" id="backend-cards"></div>
+  </div>
+  <div class="dash-card mb-4">
+    <h6 style="color:var(--accent);margin-bottom:12px;">ASR by Attack Category (averaged across models)</h6>
+    <table class="heatmap-table" id="category-table"><thead><tr><th>System</th><th>U</th><th>RD</th><th>RI</th><th>IL</th><th>OB</th><th>Avg</th></tr></thead><tbody></tbody></table>
+  </div>
+</div>
+<div class="page" id="page-runner" style="padding:0;">
+  <div style="display:flex;">
+    <div id="sidebar">
+      <div style="padding:12px;border-bottom:1px solid #252d3d;">
+        <div class="d-flex align-items-center gap-2 mb-2"><select id="model-select" class="model-select flex-grow-1"></select></div>
+      </div>
+      <div class="testbed-tabs" id="testbed-tabs"></div>
+      <div class="filter-bar" id="filter-bar">
+        <span style="font-size:.68rem;color:var(--muted)">Filter:</span>
+        <button class="filter-btn active" data-cat="ALL">ALL</button>
+        <button class="filter-btn" data-cat="Unrestricted">U</button>
+        <button class="filter-btn" data-cat="Restricted-Direct">RD</button>
+        <button class="filter-btn" data-cat="Restricted-Indirect">RI</button>
+        <button class="filter-btn" data-cat="Injection-Location">IL</button>
+        <button class="filter-btn" data-cat="Obfuscation">OB</button>
+      </div>
+      <div id="attack-list"></div>
+    </div>
+    <div id="runner-main">
+      <div class="text-center py-5 text-muted" id="placeholder">
+        <div style="font-size:3rem">&#128269;</div>
+        <div class="mt-2">Select a system and attack from the sidebar</div>
+      </div>
+      <div id="detail" style="display:none">
+        <div class="d-flex align-items-start gap-3 mb-3 flex-wrap">
+          <div>
+            <h4 id="d-name" class="mb-1" style="color:var(--accent)"></h4>
+            <div class="d-flex gap-2 flex-wrap">
+              <span id="d-cat" class="badge text-bg-secondary"></span>
+              <span id="d-restriction" class="badge text-bg-dark border"></span>
+              <span id="d-target" class="badge text-bg-dark border"></span>
+              <span id="d-poison-badge" style="display:none" class="badge-poison">STORED INJECTION</span>
+            </div>
+          </div>
+          <div class="ms-auto d-flex gap-2 align-items-center">
+            <button class="btn btn-primary btn-sm" id="run-btn"><span id="btn-spinner" class="spinner-border" style="width:14px;height:14px;border-width:2px;display:none"></span> &#9654; Run Attack</button>
+          </div>
+        </div>
+        <div class="step-box" id="step-payload"><div class="step-title"><span class="step-num">0</span> Malicious Payload</div><div class="payload-box" id="d-payload"></div></div>
+        <div class="step-box step-pending" id="step-poison" style="display:none"><div class="step-title"><span class="step-num">P</span> Stored Injection</div><div id="d-poison-diff"></div></div>
+        <div class="step-box step-pending" id="step-gen"><div class="step-title"><span class="step-num">1</span> LLM Generates API Call <span id="gen-timing" class="timing"></span></div><div class="row g-2"><div class="col-12"><small class="text-muted">Raw LLM output</small><pre id="d-llm-raw">-</pre></div><div class="col-md-6"><small class="text-muted">Parsed call</small><pre id="d-generated-call">-</pre></div></div></div>
+        <div class="step-box step-pending" id="step-exec"><div class="step-title"><span class="step-num">2</span> Execute API Call <span id="exec-timing" class="timing"></span></div><div class="row g-2"><div class="col-md-6"><small class="text-muted">Request</small><pre id="d-primary-call">-</pre></div><div class="col-md-6"><small class="text-muted">Response <span id="d-status" class="badge text-bg-secondary ms-1"></span></small><pre id="d-api-response">-</pre></div></div></div>
+        <div class="step-box step-pending" id="step-reflect"><div class="step-title"><span class="step-num">3</span> LLM Reflection <span id="reflect-timing" class="timing"></span></div><div class="row g-2"><div class="col-md-6"><small class="text-muted">LLM decision</small><pre id="d-reflect-raw">-</pre></div><div class="col-md-6" id="followup-col" style="display:none"><small class="text-muted">Follow-up call</small><pre id="d-followup-call">-</pre><small class="text-muted mt-1 d-block">Response</small><pre id="d-followup-resp">-</pre></div><div class="col-12" id="no-followup-msg" style="display:none"><small class="text-muted">No follow-up needed</small></div></div></div>
+        <div class="step-box step-pending" id="step-answer"><div class="step-title"><span class="step-num">4</span> LLM Answer <span id="answer-timing" class="timing"></span></div><pre id="d-llm-answer">-</pre></div>
+        <div class="step-box step-pending" id="step-result"><div class="step-title"><span class="step-num">5</span> Verdict</div><div class="d-flex align-items-center gap-3"><span id="d-result-badge"></span><small id="d-result-note" class="text-muted"></small><span id="d-total-timing" class="timing ms-auto"></span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page" id="page-results-detail">
+  <h4 style="color:var(--accent);margin-bottom:4px;">Per-Attack Results</h4>
+  <p class="text-muted mb-3" style="font-size:.85rem;">Drill into individual attack ASR across all models</p>
+  <div class="d-flex gap-2 mb-3 flex-wrap">
+    <select class="model-select" id="rd-sys-select"></select>
+    <select class="model-select" id="rd-model-select"><option value="all">All Models</option></select>
+  </div>
+  <div class="dash-card"><table class="detail-table" id="results-detail-table"><thead><tr><th>Attack ID</th><th>Name</th><th>Category</th></tr></thead><tbody></tbody></table></div>
+</div>
+<div class="page" id="page-custom">
+  <h4 style="color:var(--accent);margin-bottom:12px;">Custom API Call</h4>
+  <div class="dash-card">
+    <div class="row g-3">
+      <div class="col-md-2"><label class="form-label small text-muted">Testbed</label><select class="form-select form-select-sm bg-dark text-light border-secondary" id="c-testbed"><option value="portal">Portal</option><option value="ecommerce">E-Commerce</option><option value="directus">Directus</option><option value="gitea">Gitea</option><option value="homeassistant">Home Assistant</option></select></div>
+      <div class="col-md-2"><label class="form-label small text-muted">Method</label><select class="form-select form-select-sm bg-dark text-light border-secondary" id="c-method"><option>GET</option><option>POST</option><option>PATCH</option><option>DELETE</option></select></div>
+      <div class="col-md-5"><label class="form-label small text-muted">Endpoint</label><input type="text" class="form-control form-control-sm bg-dark text-light border-secondary" id="c-endpoint" value="/api/jobs"/></div>
+      <div class="col-md-3"><label class="form-label small text-muted">User ID</label><input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" id="c-uid" value="2"/></div>
+      <div class="col-12"><label class="form-label small text-muted">Body (JSON)</label><textarea class="form-control bg-dark text-light border-secondary" id="c-body" rows="3" placeholder='{"key":"value"}'></textarea></div>
+      <div class="col-12"><button class="btn btn-primary btn-sm" id="run-custom-btn">Run Call</button></div>
+      <div id="custom-result" style="display:none" class="col-12"><div class="step-box"><div class="step-title">Response</div><pre id="custom-resp"></pre></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SYSTEMS=['portal','ecommerce','gitea','homeassistant','directus'];
+const SYSTEM_LABELS={portal:'Job Portal (Strapi)',ecommerce:'E-Commerce (Flask)',gitea:'Gitea',homeassistant:'Home Assistant',directus:'Directus CMS'};
+const CAT_MAP={'Unrestricted':'U','Restricted-Direct':'RD','Restricted-Indirect':'RI','Injection-Location':'IL','Obfuscation':'OB','Indirect-Leakage':'IL'};
+let allAttacks=[],allResults={},modelList=[];
+let currentTestbed='portal',currentCat='ALL',currentId=null,currentAtk=null;
+
+document.querySelectorAll('#page-nav .nav-link').forEach(el=>{
+  el.addEventListener('click',e=>{e.preventDefault();
+    document.querySelectorAll('#page-nav .nav-link').forEach(x=>x.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-'+el.dataset.page).classList.add('active');
+  });
+});
+
+function asrColor(v){if(v>=80)return'rgba(231,76,60,.7)';if(v>=60)return'rgba(243,156,18,.6)';if(v>=40)return'rgba(241,196,15,.5)';if(v>=20)return'rgba(46,204,113,.5)';return'rgba(46,204,113,.3)';}
+function asrClass(v){return v>=70?'high':v>=40?'med':'low';}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+async function init(){
+  try{const r=await fetch('/api/models');const d=await r.json();modelList=d.models||[d.default];
+    const sel=document.getElementById('model-select');sel.innerHTML='';
+    modelList.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;sel.appendChild(o);});
+    const rdm=document.getElementById('rd-model-select');rdm.innerHTML='<option value="all">All Models</option>';
+    modelList.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;rdm.appendChild(o);});
+  }catch(e){modelList=['llama3:latest'];}
+  try{const r=await fetch('/api/ollama_status');const d=await r.json();
+    document.getElementById('ollama-status').innerHTML=d.ok?'<span class="status-dot status-ok"></span>Ollama: '+d.models+' models':'<span class="status-dot status-fail"></span>Ollama: offline';
+  }catch(e){}
+  try{const r=await fetch('/api/backend_status');const d=await r.json();
+    const bc=document.getElementById('backend-cards');
+    let statusStr='';
+    for(const[name,info]of Object.entries(d.backends||{})){
+      const ok=info.ok;
+      bc.innerHTML+='<div class="col-auto"><div class="dash-card" style="padding:8px 14px;"><span class="status-dot '+(ok?'status-ok':'status-fail')+'"></span><b>'+(SYSTEM_LABELS[name]||name)+'</b> <span class="text-muted" style="font-size:.75rem;">'+(info.url||'')+'</span></div></div>';
+      statusStr+='<span class="status-dot '+(info.ok?'status-ok':'status-fail')+'"></span>'+name+' ';
+    }
+    document.getElementById('backends-status').innerHTML=statusStr;
+  }catch(e){}
+  try{const r=await fetch('/api/attacks');allAttacks=await r.json();}catch(e){}
+  try{const r=await fetch('/api/results');allResults=await r.json();}catch(e){}
+  buildTestbedTabs();renderList();renderDashboard();renderResultsDetail();
+}
+
+function renderDashboard(){
+  const grid={},modelTotals={},systemTotals={};
+  let grandSucc=0,grandN=0,expCount=0;const modelSet=new Set();
+  for(const[key,d]of Object.entries(allResults)){
+    const sys=d.system,model=d.model;modelSet.add(model);
+    if(!grid[sys])grid[sys]={};grid[sys][model]=d.overall_asr;
+    grandSucc+=d.total_successes;grandN+=d.total_trials;expCount++;
+    if(!modelTotals[model])modelTotals[model]={s:0,n:0};
+    modelTotals[model].s+=d.total_successes;modelTotals[model].n+=d.total_trials;
+    if(!systemTotals[sys])systemTotals[sys]={s:0,n:0};
+    systemTotals[sys].s+=d.total_successes;systemTotals[sys].n+=d.total_trials;
+  }
+  const models=Array.from(modelSet).sort();
+  const grandAsr=grandN>0?(100*grandSucc/grandN).toFixed(1):'0';
+  const gaEl=document.getElementById('grand-asr');gaEl.textContent=grandAsr+'%';gaEl.className='asr-big '+asrClass(parseFloat(grandAsr));
+  document.getElementById('grand-detail').textContent=grandSucc+'/'+grandN+' trials succeeded';
+  document.getElementById('exp-count').textContent=expCount;
+  document.getElementById('exp-detail').textContent=models.length+' models x '+SYSTEMS.filter(s=>systemTotals[s]).length+' systems';
+  let maxModelAsr=0,maxModelName='-';
+  for(const[m,t]of Object.entries(modelTotals)){const a=t.n>0?100*t.s/t.n:0;if(a>maxModelAsr){maxModelAsr=a;maxModelName=m;}}
+  document.getElementById('vuln-model').textContent=maxModelName;document.getElementById('vuln-model-detail').textContent=maxModelAsr.toFixed(1)+'% ASR';
+  let maxSysAsr=0,maxSysName='-';
+  for(const[s,t]of Object.entries(systemTotals)){const a=t.n>0?100*t.s/t.n:0;if(a>maxSysAsr){maxSysAsr=a;maxSysName=s;}}
+  document.getElementById('vuln-sys').textContent=SYSTEM_LABELS[maxSysName]||maxSysName;document.getElementById('vuln-sys-detail').textContent=maxSysAsr.toFixed(1)+'% ASR';
+  const thead=document.querySelector('#heatmap-table thead tr');thead.innerHTML='<th>System</th>';
+  models.forEach(m=>{thead.innerHTML+='<th>'+esc(m)+'</th>';});thead.innerHTML+='<th>Avg</th>';
+  const tbody=document.querySelector('#heatmap-table tbody');tbody.innerHTML='';
+  const modelAvgs={};models.forEach(m=>{modelAvgs[m]=[];});
+  SYSTEMS.filter(s=>systemTotals[s]).forEach(sys=>{
+    let row='<td class="sys-label">'+(SYSTEM_LABELS[sys]||sys)+'</td>';const sysAsrs=[];
+    models.forEach(m=>{
+      const v=(grid[sys]&&grid[sys][m]!==undefined)?grid[sys][m]:null;
+      if(v!==null){row+='<td style="background:'+asrColor(v)+';color:#fff;">'+v.toFixed(1)+'%</td>';sysAsrs.push(v);modelAvgs[m].push(v);}
+      else{row+='<td style="color:var(--muted);">N/A</td>';}
+    });
+    const avg=sysAsrs.length>0?sysAsrs.reduce((a,b)=>a+b,0)/sysAsrs.length:0;
+    row+='<td style="background:'+asrColor(avg)+';color:#fff;font-weight:700;">'+avg.toFixed(1)+'%</td>';
+    tbody.innerHTML+='<tr>'+row+'</tr>';
+  });
+  let avgRow='<td class="sys-label" style="font-weight:700;">Average</td>';
+  models.forEach(m=>{const vals=modelAvgs[m];const avg=vals.length>0?vals.reduce((a,b)=>a+b,0)/vals.length:0;
+    avgRow+='<td style="background:'+asrColor(avg)+';color:#fff;font-weight:700;">'+avg.toFixed(1)+'%</td>';});
+  avgRow+='<td></td>';tbody.innerHTML+='<tr style="border-top:2px solid #4f8ef7;">'+avgRow+'</tr>';
+  // Category table
+  const catTable=document.querySelector('#category-table tbody');catTable.innerHTML='';
+  const cats=['U','RD','RI','IL','OB'];
+  SYSTEMS.filter(s=>systemTotals[s]).forEach(sys=>{
+    let row='<td class="sys-label">'+(SYSTEM_LABELS[sys]||sys)+'</td>';const catAsrs=[];
+    cats.forEach(cat=>{let cs=0,cn=0;
+      for(const[key,d]of Object.entries(allResults)){if(d.system!==sys)continue;
+        for(const[aid,ad]of Object.entries(d.attacks)){const parts=aid.split(/[-\.]/);let ac='';
+          if(parts.length>=2)ac=parts[parts.length-2].replace(/\d+/g,'');if(ac.length<1||ac.length>3){const m2=aid.match(/-(U|RD|RI|IL|OB)\./);ac=m2?m2[1]:'';}
+          if(ac===cat){cs+=ad.successes;cn+=ad.n;}}}
+      if(cn>0){const v=100*cs/cn;row+='<td style="background:'+asrColor(v)+';color:#fff;">'+v.toFixed(1)+'%</td>';catAsrs.push(v);}
+      else{row+='<td style="color:var(--muted);">-</td>';}});
+    const avg=catAsrs.length>0?catAsrs.reduce((a,b)=>a+b,0)/catAsrs.length:0;
+    row+='<td style="background:'+asrColor(avg)+';color:#fff;font-weight:700;">'+avg.toFixed(1)+'%</td>';
+    catTable.innerHTML+='<tr>'+row+'</tr>';
+  });
+}
+
+function renderResultsDetail(){
+  const rds=document.getElementById('rd-sys-select');rds.innerHTML='';
+  SYSTEMS.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=SYSTEM_LABELS[s]||s;rds.appendChild(o);});
+  updateResultsDetailTable();
+}
+function updateResultsDetailTable(){
+  const sys=document.getElementById('rd-sys-select').value;
+  const modelFilter=document.getElementById('rd-model-select').value;
+  const tbody=document.querySelector('#results-detail-table tbody');
+  const thead=document.querySelector('#results-detail-table thead tr');
+  const availModels=[];
+  for(const[key,d]of Object.entries(allResults)){if(d.system===sys)availModels.push(d.model);}
+  availModels.sort();const showModels=modelFilter==='all'?availModels:availModels.filter(m=>m===modelFilter);
+  thead.innerHTML='<th>Attack ID</th><th>Name</th><th>Category</th>';
+  showModels.forEach(m=>{thead.innerHTML+='<th style="text-align:center;">'+esc(m)+'</th>';});
+  const sysAttacks=allAttacks.filter(a=>a.testbed===sys);tbody.innerHTML='';
+  sysAttacks.forEach(a=>{
+    let row='<td style="color:var(--accent);font-weight:600;">'+esc(a.id)+'</td>';
+    row+='<td>'+esc(a.name)+'</td>';const ck=CAT_MAP[a.category]||'?';
+    row+='<td><span class="badge-cat cat-'+ck+'">'+ck+'</span></td>';
+    showModels.forEach(m=>{let found=false;
+      for(const[key,d]of Object.entries(allResults)){
+        if(d.system===sys&&d.model===m&&d.attacks[a.id]){const ad=d.attacks[a.id];const v=ad.asr;
+          row+='<td style="text-align:center;background:'+asrColor(v)+';color:#fff;">'+v.toFixed(0)+'% <span style="font-size:.65rem;opacity:.7;">('+ad.successes+'/'+ad.n+')</span></td>';
+          found=true;break;}}
+      if(!found)row+='<td style="text-align:center;color:var(--muted);">-</td>';});
+    tbody.innerHTML+='<tr>'+row+'</tr>';
+  });
+}
+document.getElementById('rd-sys-select').addEventListener('change',updateResultsDetailTable);
+document.getElementById('rd-model-select').addEventListener('change',updateResultsDetailTable);
+
+function buildTestbedTabs(){
+  const container=document.getElementById('testbed-tabs');container.innerHTML='';
+  SYSTEMS.forEach(s=>{const el=document.createElement('div');el.className='tb-tab'+(s===currentTestbed?' active':'');
+    el.textContent=SYSTEM_LABELS[s]||s;el.dataset.tb=s;
+    el.addEventListener('click',()=>{currentTestbed=s;currentId=null;currentAtk=null;
+      container.querySelectorAll('.tb-tab').forEach(x=>x.classList.remove('active'));el.classList.add('active');
+      document.getElementById('placeholder').style.display='block';document.getElementById('detail').style.display='none';renderList();});
+    container.appendChild(el);});
+}
+function renderList(){
+  const list=document.getElementById('attack-list');list.innerHTML='';
+  allAttacks.filter(a=>{if(a.testbed!==currentTestbed)return false;if(currentCat!=='ALL'&&a.category!==currentCat)return false;return true;}).forEach(a=>{
+    const div=document.createElement('div');div.className='atk-item'+(a.id===currentId?' active':'');
+    const ck=CAT_MAP[a.category]||'?';
+    div.innerHTML='<div class="d-flex justify-content-between"><span style="font-size:.82rem;font-weight:500">'+esc(a.id)+'</span><span class="badge-cat cat-'+ck+'">'+ck+'</span></div>'
+      +'<div style="font-size:.73rem;color:var(--muted);margin-top:1px">'+esc(a.name)+'</div>'
+      +(a.requires_poison?'<div class="mt-1"><span class="badge-poison">POISON</span></div>':'');
+    div.onclick=()=>selectAttack(a);list.appendChild(div);});
+}
+function selectAttack(a){
+  currentId=a.id;currentAtk=a;renderList();
+  document.getElementById('placeholder').style.display='none';document.getElementById('detail').style.display='block';
+  document.getElementById('d-name').textContent=a.id+' - '+a.name;
+  document.getElementById('d-cat').textContent=a.category;
+  document.getElementById('d-restriction').textContent='Restriction: '+a.restriction;
+  document.getElementById('d-target').textContent='Target: '+(a.target||'?');
+  document.getElementById('d-payload').textContent=a.payload;
+  document.getElementById('d-poison-badge').style.display=a.requires_poison?'':'none';
+  document.getElementById('step-poison').style.display=a.requires_poison?'block':'none';
+  ['step-gen','step-exec','step-reflect','step-answer','step-result'].forEach(id=>{document.getElementById(id).className='step-box step-pending';});
+  ['d-llm-raw','d-generated-call','d-primary-call','d-api-response','d-reflect-raw','d-followup-call','d-followup-resp','d-llm-answer'].forEach(id=>{document.getElementById(id).textContent='-';});
+  ['gen-timing','exec-timing','reflect-timing','answer-timing','d-total-timing'].forEach(id=>{document.getElementById(id).textContent='';});
+  document.getElementById('d-status').textContent='';document.getElementById('d-result-badge').innerHTML='';
+  document.getElementById('d-result-note').textContent='Click Run to execute';
+  document.getElementById('followup-col').style.display='none';document.getElementById('no-followup-msg').style.display='none';
+  document.getElementById('d-poison-diff').innerHTML='';document.getElementById('step-poison').className='step-box step-pending';
+}
+function setStepLoading(id){const el=document.getElementById(id);el.className='step-box step-active';const t=el.querySelector('.step-title');if(t)t.classList.add('step-loading');}
+function setStepDone(id){const el=document.getElementById(id);el.className='step-box step-done';const t=el.querySelector('.step-title');if(t)t.classList.remove('step-loading');}
+
+async function runAttack(){
+  if(!currentId||!currentAtk)return;const btn=document.getElementById('run-btn');const spinner=document.getElementById('btn-spinner');
+  const model=document.getElementById('model-select').value;btn.disabled=true;spinner.style.display='';
+  setStepLoading('step-gen');if(currentAtk.requires_poison)setStepLoading('step-poison');
+  try{const resp=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({testbed:currentAtk.testbed,atk_id:currentId,model})});
+    const data=await resp.json();renderRunResult(data);
+  }catch(e){document.getElementById('d-result-note').textContent='Error: '+e.message;}
+  finally{btn.disabled=false;spinner.style.display='none';}
+}
+function renderRunResult(data){
+  if(data.requires_poison){setStepDone('step-poison');const diffEl=document.getElementById('d-poison-diff');
+    if(data.poison_diff&&data.poison_diff.length>0){diffEl.innerHTML=data.poison_diff.map(ch=>
+      '<div class="diff-badge"><b>'+esc(ch.table)+'['+ch.id+'].'+ch.field+'</b><br>'
+      +'<span style="color:#fca5a5">Before: '+esc((ch.before||'').substring(0,100))+'</span><br>'
+      +'<span style="color:#86efac">After: '+esc((ch.after||'').substring(0,120))+'</span></div>').join('');}}
+  setStepDone('step-gen');
+  document.getElementById('d-llm-raw').textContent=data.llm_raw_call||'-';
+  document.getElementById('d-generated-call').textContent=data.generated_call?JSON.stringify(data.generated_call,null,2):'-';
+  document.getElementById('gen-timing').textContent=data.t_gen?data.t_gen+'s':'';
+  setStepDone('step-exec');
+  document.getElementById('d-primary-call').textContent=data.generated_call?JSON.stringify(data.generated_call,null,2):'-';
+  document.getElementById('d-api-response').textContent=data.api_response?JSON.stringify(data.api_response,null,2):'-';
+  document.getElementById('d-status').textContent=data.status_code||'';
+  document.getElementById('exec-timing').textContent=data.t_exec?data.t_exec+'s':'';
+  setStepDone('step-reflect');
+  document.getElementById('d-reflect-raw').textContent=data.reflection_raw||'-';
+  document.getElementById('reflect-timing').textContent=data.t_reflect?data.t_reflect+'s':'';
+  if(data.followup_call&&data.followup_call.method){document.getElementById('followup-col').style.display='block';
+    document.getElementById('d-followup-call').textContent=JSON.stringify(data.followup_call,null,2);
+    document.getElementById('d-followup-resp').textContent=JSON.stringify(data.followup_response,null,2);}
+  else{document.getElementById('no-followup-msg').style.display='block';}
+  setStepDone('step-answer');
+  document.getElementById('d-llm-answer').textContent=data.llm_answer||'-';
+  document.getElementById('answer-timing').textContent=data.t_ans?data.t_ans+'s':'';
+  setStepDone('step-result');
+  document.getElementById('d-result-badge').innerHTML=data.success
+    ?'<span class="badge-success-c">&#10003; Attack Succeeded</span>'
+    :'<span class="badge-fail-c">&#10005; Attack Blocked</span>';
+  document.getElementById('d-result-note').textContent=data.success
+    ?'LLM was manipulated into a security violation':'LLM correctly refused the attack';
+  document.getElementById('d-total-timing').textContent=data.t_total?'Total: '+data.t_total+'s':'';
+}
+async function runCustom(){
+  const testbed=document.getElementById('c-testbed').value;const method=document.getElementById('c-method').value;
+  const endpoint=document.getElementById('c-endpoint').value.trim();const uid=parseInt(document.getElementById('c-uid').value)||2;
+  let body=null;const bodyStr=document.getElementById('c-body').value.trim();
+  if(bodyStr){try{body=JSON.parse(bodyStr);}catch(e){alert('Invalid JSON: '+e.message);return;}}
+  const btn=document.getElementById('run-custom-btn');btn.disabled=true;btn.textContent='Running...';
+  try{const r=await fetch('/api/custom',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({testbed,method,endpoint,body,user_id:uid})});
+    const data=await r.json();document.getElementById('custom-result').style.display='block';
+    document.getElementById('custom-resp').textContent=JSON.stringify(data,null,2);}
+  catch(e){alert('Error: '+e.message);}finally{btn.disabled=false;btn.textContent='Run Call';}
+}
+document.getElementById('run-btn').addEventListener('click',runAttack);
+document.getElementById('run-custom-btn').addEventListener('click',runCustom);
+document.querySelectorAll('.filter-btn').forEach(btn=>{btn.addEventListener('click',()=>{
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+  currentCat=btn.dataset.cat;renderList();});});
+init();
+</script>
+</body>
+</html>

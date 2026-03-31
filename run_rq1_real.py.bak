@@ -1,0 +1,280 @@
+"""
+RQ1 Real Backend Experiment Runner
+===================================
+Runs attacks against real backend systems via the local p2a_demo.py Flask server
+(USE_REAL_BACKEND=1).
+
+For the portal testbed: attacks hit Strapi (port 1337)
+For the ecommerce testbed: attacks hit E-Commerce Flask (port 5050)
+
+Results are saved per-system under:
+  results/RQ1/portal/     - portal attacks on Strapi
+  results/RQ1/ecommerce/  - EC-* attacks on E-Commerce
+"""
+
+import json, math, os, sys, time
+from pathlib import Path
+import requests
+
+DEMO_URL = os.environ.get("DEMO_URL", "http://localhost:8888")
+RUN_URL  = f"{DEMO_URL}/api/run"
+TIMEOUT  = 300
+PAUSE    = 1.0
+MODEL    = os.environ.get("OLLAMA_MODEL", "llama3:latest")
+N_TRIALS = int(os.environ.get("N_TRIALS", "10"))
+
+PORTAL_ATTACKS = [
+    "U.1", "U.2", "U.3", "U.4", "U.5",
+    "RD.1", "RD.2", "RD.3", "RD.4",
+    "RI.1", "RI.2", "RI.3", "RI.4", "RI.5",
+]
+
+EC_ATTACKS = [
+    "EC-U.1", "EC-U.3",
+    "EC-RD.1", "EC-RD.2", "EC-RD.3",
+    "EC-RI.1", "EC-RI.2", "EC-RI.9",
+    "EC-IL.1", "EC-IL.3",
+    "EC-OB.1", "EC-OB.2", "EC-OB.3", "EC-OB.7",
+]
+
+GITEA_ATTACKS = [
+    "GT-U.1", "GT-U.2",
+    "GT-RD.1", "GT-RD.2", "GT-RD.3",
+    "GT-RI.1", "GT-RI.2", "GT-RI.3",
+    "GT-IL.1", "GT-IL.2",
+    "GT-OB.1", "GT-OB.2", "GT-OB.3", "GT-OB.4",
+]
+
+HA_ATTACKS_LIST = [
+    "HA-U.1", "HA-U.2",
+    "HA-RD.1", "HA-RD.2", "HA-RD.3",
+    "HA-RI.1", "HA-RI.2", "HA-RI.3",
+    "HA-IL.1", "HA-IL.2",
+    "HA-OB.1", "HA-OB.2", "HA-OB.3", "HA-OB.4",
+]
+
+DX_ATTACKS = [
+    "DX-U.1", "DX-U.2",
+    "DX-RD.1", "DX-RD.2", "DX-RD.3",
+    "DX-RI.1", "DX-RI.2", "DX-RI.3",
+    "DX-IL.1", "DX-IL.2",
+    "DX-OB.1", "DX-OB.2", "DX-OB.3", "DX-OB.4",
+]
+
+RESULTS_BASE = Path(__file__).parent / "results" / "RQ1"
+
+
+def wilson_ci(successes, n, z=1.96):
+    if n == 0:
+        return (0.0, 0.0)
+    p = successes / n
+    denom = 1 + z * z / n
+    center = (p + z * z / (2 * n)) / denom
+    margin = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    lo = round(max(0.0, center - margin) * 100, 1)
+    hi = round(min(1.0, center + margin) * 100, 1)
+    return (lo, hi)
+
+
+def do_trial(atk_id, testbed, model):
+    payload = {
+        "testbed": testbed,
+        "atk_id": atk_id,
+        "model": model,
+    }
+    try:
+        r = requests.post(RUN_URL, json=payload, timeout=TIMEOUT)
+        r.raise_for_status()
+        d = r.json()
+        return {
+            "success": bool(d.get("success", False)),
+            "t_total": d.get("t_total", 0),
+            "t_gen": d.get("t_gen", 0),
+            "t_exec": d.get("t_exec", 0),
+            "t_reflect": d.get("t_reflect", 0),
+            "t_ans": d.get("t_ans", 0),
+            "generated_call": d.get("generated_call"),
+            "status_code": d.get("status_code"),
+            "api_response_snippet": str(d.get("api_response", ""))[:500],
+            "followup_call": d.get("followup_call"),
+            "followup_status": d.get("followup_status"),
+            "llm_answer_snippet": str(d.get("llm_answer", ""))[:500],
+            "reflection_raw": str(d.get("reflection_raw", ""))[:300],
+            "error": d.get("error"),
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "t_total": 0,
+            "generated_call": None,
+            "error": str(e),
+        }
+
+
+def run_attacks(system_name, testbed, attack_ids, model, n_trials, out_dir):
+    out_dir.mkdir(parents=True, exist_ok=True)
+    total = len(attack_ids) * n_trials
+    done = 0
+    t0 = time.time()
+    all_results = {}
+    summary = {}
+
+    print(f"\n{'='*70}")
+    print(f"  System: {system_name}  |  Testbed: {testbed}  |  Model: {model}")
+    print(f"  Attacks: {len(attack_ids)}  |  Trials: {n_trials}  |  Total runs: {total}")
+    print(f"{'='*70}\n")
+
+    for atk_id in attack_ids:
+        trials = []
+        for i in range(n_trials):
+            done += 1
+            elapsed = time.time() - t0
+            eta = elapsed / done * (total - done) if done > 0 else 0
+
+            result = do_trial(atk_id, testbed, model)
+            trials.append(result)
+
+            badge = "OK" if result["success"] else "--"
+            print(
+                f"  {badge} {atk_id:<12} trial {i+1:>2}/{n_trials}  "
+                f"t={result.get('t_total',0):.1f}s  "
+                f"({done}/{total}  ETA {eta/60:.1f}min)",
+                flush=True,
+            )
+            time.sleep(PAUSE)
+
+        successes = sum(1 for t in trials if t["success"])
+        asr = round(successes / n_trials * 100, 1)
+        ci_lo, ci_hi = wilson_ci(successes, n_trials)
+
+        summary[atk_id] = {
+            "n": n_trials,
+            "successes": successes,
+            "asr": asr,
+            "ci_lo": ci_lo,
+            "ci_hi": ci_hi,
+        }
+        all_results[atk_id] = trials
+        print(f"  >> {atk_id}: ASR = {asr}%  CI = [{ci_lo}, {ci_hi}]\n")
+
+    output = {
+        "system": system_name,
+        "testbed": testbed,
+        "model": model,
+        "n_trials": n_trials,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "total_time_sec": round(time.time() - t0, 1),
+        "summary": summary,
+        "raw_trials": all_results,
+    }
+
+    fname = f"rq1_{system_name}_{model.replace(':', '_').replace('/', '_')}.json"
+    out_path = out_dir / fname
+    out_path.write_text(json.dumps(output, indent=2, ensure_ascii=False, default=str))
+    print(f"  Results saved => {out_path}")
+
+    print(f"\n{'_'*55}")
+    print(f"  {'Attack':<12} {'ASR':>6}  {'95% CI':<20} {'Succ':>5}/{n_trials}")
+    print(f"{'_'*55}")
+    for atk_id in attack_ids:
+        s = summary[atk_id]
+        print(
+            f"  {atk_id:<12} {s['asr']:>5}%  "
+            f"[{s['ci_lo']:>5}, {s['ci_hi']:>5}]  "
+            f"{s['successes']:>5}/{s['n']}"
+        )
+    overall_asr = round(
+        sum(s["asr"] for s in summary.values()) / len(summary), 1
+    )
+    print(f"{'_'*55}")
+    print(f"  {'Overall':<12} {overall_asr:>5}%")
+    print()
+
+    return summary
+
+
+def main():
+    import argparse
+    ap = argparse.ArgumentParser(description="RQ1 Real Backend Experiments")
+    ap.add_argument("--system", choices=["portal", "ecommerce", "gitea", "homeassistant", "directus", "all"], default="all",
+                    help="Which system to test")
+    ap.add_argument("--n", type=int, default=N_TRIALS,
+                    help="Number of trials per attack")
+    ap.add_argument("--model", default=MODEL,
+                    help="Ollama model name")
+    args = ap.parse_args()
+
+    try:
+        r = requests.get(f"{DEMO_URL}/api/backend_status", timeout=10)
+        status = r.json()
+        if not status.get("use_real_backend"):
+            print("ERROR: Demo is NOT running in real backend mode!")
+            print("Start with: USE_REAL_BACKEND=1 PORT=8888 python3 p2a_demo.py")
+            sys.exit(1)
+        print("Backend status:")
+        for name, info in status.get("backends", {}).items():
+            ok = "OK" if info.get("ok") else "FAIL"
+            print(f"  {ok} {name}: {info.get('url')} (status {info.get('status', 'N/A')})")
+    except Exception as e:
+        print(f"ERROR: Cannot reach demo at {DEMO_URL}: {e}")
+        sys.exit(1)
+
+    t_start = time.time()
+
+    if args.system in ("ecommerce", "all"):
+        run_attacks(
+            system_name="ecommerce",
+            testbed="ecommerce",
+            attack_ids=EC_ATTACKS,
+            model=args.model,
+            n_trials=args.n,
+            out_dir=RESULTS_BASE / "ecommerce",
+        )
+
+    if args.system in ("portal", "all"):
+        run_attacks(
+            system_name="portal",
+            testbed="portal",
+            attack_ids=PORTAL_ATTACKS,
+            model=args.model,
+            n_trials=args.n,
+            out_dir=RESULTS_BASE / "portal",
+        )
+
+    if args.system in ("gitea", "all"):
+        run_attacks(
+            system_name="gitea",
+            testbed="gitea",
+            attack_ids=GITEA_ATTACKS,
+            model=args.model,
+            n_trials=args.n,
+            out_dir=RESULTS_BASE / "gitea",
+        )
+
+    if args.system in ("homeassistant", "all"):
+        run_attacks(
+            system_name="homeassistant",
+            testbed="homeassistant",
+            attack_ids=HA_ATTACKS_LIST,
+            model=args.model,
+            n_trials=args.n,
+            out_dir=RESULTS_BASE / "homeassistant",
+        )
+
+    if args.system in ("directus", "all"):
+        run_attacks(
+            system_name="directus",
+            testbed="directus",
+            attack_ids=DX_ATTACKS,
+            model=args.model,
+            n_trials=args.n,
+            out_dir=RESULTS_BASE / "directus",
+        )
+
+    total_min = (time.time() - t_start) / 60
+    print(f"\nAll experiments completed in {total_min:.1f} minutes.")
+    print(f"Results in: {RESULTS_BASE}/")
+
+
+if __name__ == "__main__":
+    main()
