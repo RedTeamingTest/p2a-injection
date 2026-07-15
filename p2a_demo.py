@@ -393,8 +393,39 @@ Answer:"""
 # LLM helpers
 # ──────────────────────────────────────────────────────────
 
+def _is_commercial(model: str) -> bool:
+    m = model.lower()
+    return m.startswith(("gpt", "claude", "o1", "o3", "o4"))
+
+
+def call_commercial(model: str, prompt: str,
+                    temperature: float = 0.0, max_tokens: int = 256) -> str:
+    """Route a generation to a hosted commercial model through an OpenAI-compatible
+    endpoint. Credentials come from the environment (COMMERCIAL_API_KEY /
+    COMMERCIAL_BASE) so they are never stored in the source tree. Reasoning models
+    may spend the token budget on hidden reasoning, so the budget is widened."""
+    key = os.environ.get("COMMERCIAL_API_KEY", "")
+    base = os.environ.get("COMMERCIAL_BASE", "https://api.openai-proxy.org").rstrip("/")
+    try:
+        r = requests.post(
+            f"{base}/v1/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": model,
+                  "messages": [{"role": "user", "content": prompt}],
+                  "temperature": temperature,
+                  "max_tokens": max(max_tokens, 512)},
+            timeout=LLM_TIMEOUT,
+        )
+        r.raise_for_status()
+        return (r.json()["choices"][0]["message"].get("content") or "").strip()
+    except Exception as e:
+        return f"[LLM_ERROR] {e}"
+
+
 def call_ollama(model: str, prompt: str,
                 temperature: float = 0.0, max_tokens: int = 256) -> str:
+    if _is_commercial(model):
+        return call_commercial(model, prompt, temperature, max_tokens)
     payload = {
         "model": model, "prompt": prompt, "stream": False,
         "options": {"temperature": temperature, "num_predict": max_tokens},
